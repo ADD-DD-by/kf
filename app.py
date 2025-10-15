@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -24,8 +25,11 @@ st.markdown("""
 st.title("客服时效分析报告")
 
 # ==================== 上传文件 ====================
-uploaded_files = st.file_uploader("📂 上传一个或多个数据文件（支持 Excel 或 CSV）",
-                                  type=["xlsx", "csv"], accept_multiple_files=True)
+uploaded_files = st.file_uploader(
+    "📂 上传一个或多个数据文件（支持 Excel 或 CSV）",
+    type=["xlsx", "csv"],
+    accept_multiple_files=True
+)
 
 if uploaded_files:
     all_dfs = []
@@ -77,27 +81,23 @@ if uploaded_files:
     for col in ["首次响应时长", "处理时长", "message_count"]:
         if col in df.columns:
             df[col] = clean_numeric_column(df[col])
-# ==================== 上传文件后（在 df 清洗后加入以下代码） ====================
 
-# === 渠道筛选入口 ===
-if "ticket_channel" in df.columns:
-    # 获取唯一渠道并排序
-    all_channels = sorted(df["ticket_channel"].dropna().unique().tolist())
-    selected_channels = st.multiselect(
-        "🎯 请选择要分析的渠道（可多选）",
-        options=all_channels,
-        default=all_channels,  # 默认全选
-    )
-
-    # 筛选出用户选择的渠道数据
-    if selected_channels:
-        df = df[df["ticket_channel"].isin(selected_channels)]
-        st.info(f"📊 当前筛选渠道：{', '.join(selected_channels)}，共 {len(df)} 条记录")
+    # ==================== 🎯 渠道筛选入口 ====================
+    if "ticket_channel" in df.columns:
+        all_channels = sorted(df["ticket_channel"].dropna().unique().tolist())
+        selected_channels = st.multiselect(
+            "🎯 请选择要分析的渠道（可多选）",
+            options=all_channels,
+            default=all_channels,
+        )
+        if selected_channels:
+            df = df[df["ticket_channel"].isin(selected_channels)]
+            st.info(f"📊 当前筛选渠道：{', '.join(selected_channels)}，共 {len(df)} 条记录")
+        else:
+            st.warning("⚠️ 未选择任何渠道，将不显示后续分析结果。")
+            st.stop()
     else:
-        st.warning("⚠️ 未选择任何渠道，将不显示后续分析结果。")
-        st.stop()
-else:
-    st.warning("⚠️ 数据中未找到渠道字段（ticket_channel），跳过渠道筛选。")
+        st.warning("⚠️ 数据中未找到渠道字段（ticket_channel），跳过渠道筛选。")
 
     # === 子集 ===
     df_reply = df.query("rn == 1")
