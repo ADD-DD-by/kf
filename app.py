@@ -131,14 +131,14 @@ if uploaded_files:
         "month": "月份",
         "message_count_median": "回复次数-中位数",
         "message_count_p90": "回复次数-P90",
-        "response_median": "首次响应时长-中位数",
-        "response_p90": "首次响应时长-P90",
-        "handle_median": "处理时长-中位数",
-        "handle_p90": "处理时长-P90",
+        "response_median": "首次响应时长h-中位数",
+        "response_p90": "首次响应时长h-P90",
+        "handle_median": "处理时长d-中位数",
+        "handle_p90": "处理时长d-P90",
     })
     st.dataframe(overall, use_container_width=True)
 
-    metric_all = st.selectbox("请选择要查看的整体指标", ["回复次数-P90", "首次响应时长-P90", "处理时长-P90"], index=2)
+    metric_all = st.selectbox("请选择要查看的整体指标", ["回复次数-P90", "首次响应时长h-P90", "处理时长d-P90"], index=2)
     if overall[metric_all].notna().any():
         fig = px.line(
             overall,
@@ -179,14 +179,14 @@ if uploaded_files:
             "month": "月份", "business_line": "品牌线",
             "message_count_median": "回复次数-中位数",
             "message_count_p90": "回复次数-P90",
-            "response_median": "首次响应时长-中位数",
-            "response_p90": "首次响应时长-P90",
-            "handle_median": "处理时长-中位数",
-            "handle_p90": "处理时长-P90",
+            "response_median": "首次响应时长h-中位数",
+            "response_p90": "首次响应时长h-P90",
+            "handle_median": "处理时长d-中位数",
+            "handle_p90": "处理时长d-P90",
         })
         st.dataframe(line_stats, use_container_width=True)
 
-        metric_line = st.selectbox("请选择要查看的品牌线指标", ["回复次数-P90", "首次响应时长-P90", "处理时长-P90"], index=2)
+        metric_line = st.selectbox("请选择要查看的品牌线指标", ["回复次数-P90", "首次响应时长h-P90", "处理时长d-P90"], index=2)
         if line_stats[metric_line].notna().any():
             fig = px.line(
                 line_stats,
@@ -227,14 +227,14 @@ if uploaded_files:
             "month": "月份", "site_code": "国家",
             "message_count_median": "回复次数-中位数",
             "message_count_p90": "回复次数-P90",
-            "response_median": "首次响应时长-中位数",
-            "response_p90": "首次响应时长-P90",
-            "handle_median": "处理时长-中位数",
-            "handle_p90": "处理时长-P90",
+            "response_median": "首次响应时长h-中位数",
+            "response_p90": "首次响应时长h-P90",
+            "handle_median": "处理时长d-中位数",
+            "handle_p90": "处理时长d-P90",
         })
         st.dataframe(site_stats, use_container_width=True)
 
-        metric_site = st.selectbox("请选择要查看的国家指标", ["回复次数-P90", "首次响应时长-P90", "处理时长-P90"], index=2)
+        metric_site = st.selectbox("请选择要查看的国家指标", ["回复次数-P90", "首次响应时长h-P90", "处理时长d-P90"], index=2)
         if site_stats[metric_site].notna().any():
             fig = px.line(
                 site_stats,
