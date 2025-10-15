@@ -86,13 +86,13 @@ if uploaded_files:
     if "ticket_channel" in df.columns:
         all_channels = sorted(df["ticket_channel"].dropna().unique().tolist())
         selected_channels = st.multiselect(
-            "🎯 请选择要分析的渠道（可多选）",
+            "💌请选择要分析的渠道（可多选）",
             options=all_channels,
             default=all_channels,
         )
         if selected_channels:
             df = df[df["ticket_channel"].isin(selected_channels)]
-            st.info(f"📊 当前筛选渠道：{', '.join(selected_channels)}，共 {len(df)} 条记录")
+            st.info(f"当前筛选渠道：{', '.join(selected_channels)}，共 {len(df)} 条记录")
         else:
             st.warning("⚠️ 未选择任何渠道，将不显示后续分析结果。")
             st.stop()
