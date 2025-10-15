@@ -24,31 +24,47 @@ st.markdown("""
 st.title("客服时效分析报告")
 
 # ==================== 上传文件 ====================
-uploaded_file = st.file_uploader("📂 上传数据文件（支持 Excel 或 CSV）", type=["xlsx", "csv"])
+uploaded_files = st.file_uploader("📂 上传一个或多个数据文件（支持 Excel 或 CSV）",
+                                  type=["xlsx", "csv"], accept_multiple_files=True)
 
-if uploaded_file:
-    # === 1️⃣ 读取文件 ===
-    if uploaded_file.name.endswith("xlsx"):
-        df = pd.read_excel(uploaded_file)
+if uploaded_files:
+    all_dfs = []
+    for i, file in enumerate(uploaded_files, 1):
+        try:
+            st.write(f"📘 正在读取第 {i} 个文件：**{file.name}** ...")
+            if file.name.endswith("xlsx"):
+                df = pd.read_excel(file)
+            else:
+                df = pd.read_csv(file)
+
+            # 去掉最后一行、空行并重置索引
+            df = df.iloc[:-1, :].dropna(how="all").reset_index(drop=True)
+            all_dfs.append(df)
+        except Exception as e:
+            st.warning(f"⚠️ 文件 {file.name} 读取失败：{e}")
+
+    # 合并所有文件
+    if all_dfs:
+        df = pd.concat(all_dfs, ignore_index=True)
+        st.success(f"✅ 共成功导入 {len(all_dfs)} 个文件，合并后共 {len(df)} 行数据")
+        st.dataframe(df.head(), use_container_width=True)
     else:
-        df = pd.read_csv(uploaded_file)
-    df = df.iloc[:-1, :].dropna(how="all").reset_index(drop=True)
+        st.error("❌ 未能成功读取任何文件，请检查格式")
+        st.stop()
 
-    st.success("✅ 数据上传成功")
-    st.dataframe(df.head(), use_container_width=True)
-
-    # === 2️⃣ 列名清理 ===
+    # === 列名清理 ===
     df.columns = df.columns.astype(str).str.strip()
 
-    # === 3️⃣ 时间列识别 ===
+    # === 时间列识别 ===
     created_col = next((c for c in df.columns if "ticket_created" in c.lower()), None)
     if created_col is None:
         st.error("❌ 未找到创建时间列（应包含 ticket_created 关键字）")
         st.stop()
+
     df["ticket_created_datetime"] = pd.to_datetime(df[created_col], errors="coerce")
     df["month"] = df["ticket_created_datetime"].dt.to_period("M").astype(str)
 
-    # === 4️⃣ 清洗 "-" 空值等 ===
+    # === 清洗 "-" 空值等 ===
     def clean_numeric_column(s: pd.Series) -> pd.Series:
         s = s.astype(str).str.strip()
         s = s.replace(
@@ -62,7 +78,7 @@ if uploaded_file:
         if col in df.columns:
             df[col] = clean_numeric_column(df[col])
 
-    # === 5️⃣ 子集 ===
+    # === 子集 ===
     df_reply = df.query("rn == 1")
     df_close = df.query("rn == 1")
 
@@ -89,6 +105,7 @@ if uploaded_file:
         .merge(handle_stats, on="month", how="outer")
         .sort_values("month")
     )
+
     overall = overall.rename(columns={
         "month": "月份",
         "message_count_median": "回复次数-中位数",
@@ -104,8 +121,7 @@ if uploaded_file:
     if overall[metric_all].notna().any():
         fig = px.line(
             overall,
-            x="月份",
-            y=metric_all,
+            x="月份", y=metric_all,
             title=f"整体 {metric_all} 趋势",
             markers=True,
             line_shape="spline",
@@ -139,8 +155,7 @@ if uploaded_file:
             .sort_values(["month", "business_line"])
         )
         line_stats = line_stats.rename(columns={
-            "month": "月份",
-            "business_line": "品牌线",
+            "month": "月份", "business_line": "品牌线",
             "message_count_median": "回复次数-中位数",
             "message_count_p90": "回复次数-P90",
             "response_median": "首次响应时长-中位数",
@@ -154,9 +169,7 @@ if uploaded_file:
         if line_stats[metric_line].notna().any():
             fig = px.line(
                 line_stats,
-                x="月份",
-                y=metric_line,
-                color="品牌线",
+                x="月份", y=metric_line, color="品牌线",
                 title=f"各品牌线 {metric_line} 趋势",
                 markers=True,
                 line_shape="spline",
@@ -190,8 +203,7 @@ if uploaded_file:
             .sort_values(["month", "site_code"])
         )
         site_stats = site_stats.rename(columns={
-            "month": "月份",
-            "site_code": "国家",
+            "month": "月份", "site_code": "国家",
             "message_count_median": "回复次数-中位数",
             "message_count_p90": "回复次数-P90",
             "response_median": "首次响应时长-中位数",
@@ -205,9 +217,7 @@ if uploaded_file:
         if site_stats[metric_site].notna().any():
             fig = px.line(
                 site_stats,
-                x="月份",
-                y=metric_site,
-                color="国家",
+                x="月份", y=metric_site, color="国家",
                 title=f"各国家 {metric_site} 趋势",
                 markers=True,
                 line_shape="spline",
