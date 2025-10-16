@@ -246,6 +246,55 @@ if uploaded_files:
             )
             fig.update_traces(marker=dict(size=7, opacity=0.8))
             st.plotly_chart(fig, use_container_width=True)
+    # ==================== Ⅲ. 渠道分析 ====================
+    if "ticket_channel" in df.columns:
+        st.header("💬 各渠道表现")
+
+        reply_channel = df_reply.groupby(["month", "ticket_channel"], as_index=False).agg(
+            message_count_median=("message_count", "median"),
+            message_count_p90=("message_count", lambda x: x.quantile(0.9)),
+        )
+        df_resp_channel = df_close[df_close["首次响应时长"].notna()]
+        resp_channel = df_resp_channel.groupby(["month", "ticket_channel"], as_index=False).agg(
+            response_median=("首次响应时长", "median"),
+            response_p90=("首次响应时长", lambda x: x.quantile(0.9)),
+        )
+        df_handle_channel = df_close[df_close["处理时长"].notna()]
+        handle_channel = df_handle_channel.groupby(["month", "ticket_channel"], as_index=False).agg(
+            handle_median=("处理时长", "median"),
+            handle_p90=("处理时长", lambda x: x.quantile(0.9)),
+        )
+
+        channel_stats = (
+            reply_channel.merge(resp_channel, on=["month", "ticket_channel"], how="outer")
+            .merge(handle_channel, on=["month", "ticket_channel"], how="outer")
+            .sort_values(["month", "ticket_channel"])
+        )
+
+        channel_stats = channel_stats.rename(columns={
+            "month": "月份", "ticket_channel": "渠道",
+            "message_count_median": "回复次数-中位数",
+            "message_count_p90": "回复次数-P90",
+            "response_median": "首次响应时长h-中位数",
+            "response_p90": "首次响应时长h-P90",
+            "handle_median": "处理时长d-中位数",
+            "handle_p90": "处理时长d-P90",
+        })
+
+        st.dataframe(channel_stats, use_container_width=True)
+
+        metric_channel = st.selectbox("请选择要查看的渠道指标", ["回复次数-P90", "首次响应时长h-P90", "处理时长d-P90"], index=2)
+        if channel_stats[metric_channel].notna().any():
+            fig = px.line(
+                channel_stats,
+                x="月份", y=metric_channel, color="渠道",
+                title=f"各渠道 {metric_channel} 趋势",
+                markers=True,
+                line_shape="spline",
+                color_discrete_sequence=px.colors.qualitative.Set2,
+            )
+            fig.update_traces(marker=dict(size=7, opacity=0.8))
+            st.plotly_chart(fig, use_container_width=True)
 
     # ==================== 📤 导出 Excel 报告 ====================
     st.header("📤 导出分析报告")
@@ -256,6 +305,8 @@ if uploaded_files:
             line_stats.to_excel(writer, index=False, sheet_name="品牌线表现")
         if "site_code" in df.columns:
             site_stats.to_excel(writer, index=False, sheet_name="国家表现")
+        if "ticket_channel" in df.columns:
+            channel_stats.to_excel(writer, index=False, sheet_name="渠道表现")
     buffer.seek(0)
 
     st.download_button(
