@@ -41,13 +41,11 @@ if uploaded_files:
             else:
                 df = pd.read_csv(file)
 
-            # 去掉最后一行、空行并重置索引
             df = df.iloc[:-1, :].dropna(how="all").reset_index(drop=True)
             all_dfs.append(df)
         except Exception as e:
             st.warning(f"⚠️ 文件 {file.name} 读取失败：{e}")
 
-    # 合并所有文件
     if all_dfs:
         df = pd.concat(all_dfs, ignore_index=True)
         st.success(f"✅ 共成功导入 {len(all_dfs)} 个文件，合并后共 {len(df)} 行数据")
@@ -56,10 +54,8 @@ if uploaded_files:
         st.error("❌ 未能成功读取任何文件，请检查格式")
         st.stop()
 
-    # === 列名清理 ===
     df.columns = df.columns.astype(str).str.strip()
 
-    # === 时间列识别 ===
     created_col = next((c for c in df.columns if "ticket_created" in c.lower()), None)
     if created_col is None:
         st.error("❌ 未找到创建时间列（应包含 ticket_created 关键字）")
@@ -68,7 +64,6 @@ if uploaded_files:
     df["ticket_created_datetime"] = pd.to_datetime(df[created_col], errors="coerce")
     df["month"] = df["ticket_created_datetime"].dt.to_period("M").astype(str)
 
-    # === 清洗 "-" 空值等 ===
     def clean_numeric_column(s: pd.Series) -> pd.Series:
         s = s.astype(str).str.strip()
         s = s.replace(
@@ -82,7 +77,7 @@ if uploaded_files:
         if col in df.columns:
             df[col] = clean_numeric_column(df[col])
 
-    # ==================== 🎯 渠道筛选入口 ====================
+    # ==================== 渠道筛选入口 ====================
     if "ticket_channel" in df.columns:
         all_channels = sorted(df["ticket_channel"].dropna().unique().tolist())
         selected_channels = st.multiselect(
@@ -96,8 +91,6 @@ if uploaded_files:
         else:
             st.warning("⚠️ 未选择任何渠道，将不显示后续分析结果。")
             st.stop()
-    else:
-        st.warning("⚠️ 数据中未找到渠道字段（ticket_channel），跳过渠道筛选。")
 
     # === 子集 ===
     df_reply = df.query("rn == 1")
@@ -110,13 +103,11 @@ if uploaded_files:
         message_count_median=("message_count", "median"),
         message_count_p90=("message_count", lambda x: x.quantile(0.9)),
     )
-    df_resp = df_close[df_close["首次响应时长"].notna()]
-    resp_stats = df_resp.groupby("month", as_index=False).agg(
+    resp_stats = df_close.groupby("month", as_index=False).agg(
         response_median=("首次响应时长", "median"),
         response_p90=("首次响应时长", lambda x: x.quantile(0.9)),
     )
-    df_handle = df_close[df_close["处理时长"].notna()]
-    handle_stats = df_handle.groupby("month", as_index=False).agg(
+    handle_stats = df_close.groupby("month", as_index=False).agg(
         handle_median=("处理时长", "median"),
         handle_p90=("处理时长", lambda x: x.quantile(0.9)),
     )
@@ -139,14 +130,19 @@ if uploaded_files:
     st.dataframe(overall, use_container_width=True)
 
     metric_all = st.selectbox("请选择要查看的整体指标", ["回复次数-P90", "首次响应时长h-P90", "处理时长d-P90"], index=2)
+
     if overall[metric_all].notna().any():
+        df_plot = overall.copy()
+        df_plot["环比变化"] = df_plot[metric_all].pct_change()
+
         fig = px.line(
-            overall,
+            df_plot,
             x="月份", y=metric_all,
-            title=f"整体 {metric_all} 趋势",
+            title=f"整体 {metric_all} 趋势（含环比）",
             markers=True,
             line_shape="spline",
             color_discrete_sequence=["#5B8FF9"],
+            hover_data={"月份": True, metric_all: ":.2f", "环比变化": ":.2%"},
         )
         fig.update_traces(marker=dict(size=8, opacity=0.8))
         st.plotly_chart(fig, use_container_width=True)
@@ -159,13 +155,11 @@ if uploaded_files:
             message_count_median=("message_count", "median"),
             message_count_p90=("message_count", lambda x: x.quantile(0.9)),
         )
-        df_resp_line = df_close[df_close["首次响应时长"].notna()]
-        resp_line = df_resp_line.groupby(["month", "business_line"], as_index=False).agg(
+        resp_line = df_close.groupby(["month", "business_line"], as_index=False).agg(
             response_median=("首次响应时长", "median"),
             response_p90=("首次响应时长", lambda x: x.quantile(0.9)),
         )
-        df_handle_line = df_close[df_close["处理时长"].notna()]
-        handle_line = df_handle_line.groupby(["month", "business_line"], as_index=False).agg(
+        handle_line = df_close.groupby(["month", "business_line"], as_index=False).agg(
             handle_median=("处理时长", "median"),
             handle_p90=("处理时长", lambda x: x.quantile(0.9)),
         )
@@ -187,14 +181,19 @@ if uploaded_files:
         st.dataframe(line_stats, use_container_width=True)
 
         metric_line = st.selectbox("请选择要查看的品牌线指标", ["回复次数-P90", "首次响应时长h-P90", "处理时长d-P90"], index=2)
+
         if line_stats[metric_line].notna().any():
+            df_plot = line_stats.copy()
+            df_plot["环比变化"] = df_plot.groupby("品牌线")[metric_line].pct_change()
+
             fig = px.line(
-                line_stats,
+                df_plot,
                 x="月份", y=metric_line, color="品牌线",
-                title=f"各品牌线 {metric_line} 趋势",
+                title=f"各品牌线 {metric_line} 趋势（含环比）",
                 markers=True,
                 line_shape="spline",
                 color_discrete_sequence=px.colors.qualitative.Set2,
+                hover_data={"月份": True, "品牌线": True, metric_line: ":.2f", "环比变化": ":.2%"},
             )
             fig.update_traces(marker=dict(size=7, opacity=0.8))
             st.plotly_chart(fig, use_container_width=True)
@@ -207,13 +206,11 @@ if uploaded_files:
             message_count_median=("message_count", "median"),
             message_count_p90=("message_count", lambda x: x.quantile(0.9)),
         )
-        df_resp_site = df_close[df_close["首次响应时长"].notna()]
-        resp_site = df_resp_site.groupby(["month", "site_code"], as_index=False).agg(
+        resp_site = df_close.groupby(["month", "site_code"], as_index=False).agg(
             response_median=("首次响应时长", "median"),
             response_p90=("首次响应时长", lambda x: x.quantile(0.9)),
         )
-        df_handle_site = df_close[df_close["处理时长"].notna()]
-        handle_site = df_handle_site.groupby(["month", "site_code"], as_index=False).agg(
+        handle_site = df_close.groupby(["month", "site_code"], as_index=False).agg(
             handle_median=("处理时长", "median"),
             handle_p90=("处理时长", lambda x: x.quantile(0.9)),
         )
@@ -235,18 +232,24 @@ if uploaded_files:
         st.dataframe(site_stats, use_container_width=True)
 
         metric_site = st.selectbox("请选择要查看的国家指标", ["回复次数-P90", "首次响应时长h-P90", "处理时长d-P90"], index=2)
+
         if site_stats[metric_site].notna().any():
+            df_plot = site_stats.copy()
+            df_plot["环比变化"] = df_plot.groupby("国家")[metric_site].pct_change()
+
             fig = px.line(
-                site_stats,
+                df_plot,
                 x="月份", y=metric_site, color="国家",
-                title=f"各国家 {metric_site} 趋势",
+                title=f"各国家 {metric_site} 趋势（含环比）",
                 markers=True,
                 line_shape="spline",
                 color_discrete_sequence=px.colors.qualitative.Set2,
+                hover_data={"月份": True, "国家": True, metric_site: ":.2f", "环比变化": ":.2%"},
             )
             fig.update_traces(marker=dict(size=7, opacity=0.8))
             st.plotly_chart(fig, use_container_width=True)
-    # ==================== Ⅲ. 渠道分析 ====================
+
+    # ==================== Ⅳ. 渠道分析 ====================
     if "ticket_channel" in df.columns:
         st.header("💬 各渠道表现")
 
@@ -254,13 +257,11 @@ if uploaded_files:
             message_count_median=("message_count", "median"),
             message_count_p90=("message_count", lambda x: x.quantile(0.9)),
         )
-        df_resp_channel = df_close[df_close["首次响应时长"].notna()]
-        resp_channel = df_resp_channel.groupby(["month", "ticket_channel"], as_index=False).agg(
+        resp_channel = df_close.groupby(["month", "ticket_channel"], as_index=False).agg(
             response_median=("首次响应时长", "median"),
             response_p90=("首次响应时长", lambda x: x.quantile(0.9)),
         )
-        df_handle_channel = df_close[df_close["处理时长"].notna()]
-        handle_channel = df_handle_channel.groupby(["month", "ticket_channel"], as_index=False).agg(
+        handle_channel = df_close.groupby(["month", "ticket_channel"], as_index=False).agg(
             handle_median=("处理时长", "median"),
             handle_p90=("处理时长", lambda x: x.quantile(0.9)),
         )
@@ -285,13 +286,17 @@ if uploaded_files:
 
         metric_channel = st.selectbox("请选择要查看的渠道指标", ["回复次数-P90", "首次响应时长h-P90", "处理时长d-P90"], index=2)
         if channel_stats[metric_channel].notna().any():
+            df_plot = channel_stats.copy()
+            df_plot["环比变化"] = df_plot.groupby("渠道")[metric_channel].pct_change()
+
             fig = px.line(
-                channel_stats,
+                df_plot,
                 x="月份", y=metric_channel, color="渠道",
-                title=f"各渠道 {metric_channel} 趋势",
+                title=f"各渠道 {metric_channel} 趋势（含环比）",
                 markers=True,
                 line_shape="spline",
                 color_discrete_sequence=px.colors.qualitative.Set2,
+                hover_data={"月份": True, "渠道": True, metric_channel: ":.2f", "环比变化": ":.2%"},
             )
             fig.update_traces(marker=dict(size=7, opacity=0.8))
             st.plotly_chart(fig, use_container_width=True)
