@@ -96,6 +96,22 @@ if uploaded_files:
     df_reply = df.query("rn == 1")
     df_close = df.query("rn == 1")
 
+    # 公共函数：计算环比列
+    def add_mom(df_group, group_cols=None):
+        df_out = df_group.copy()
+        metrics = [c for c in df_out.columns if any(k in c for k in ["回复次数", "响应时长", "处理时长"])]
+        if group_cols:
+            for m in metrics:
+                df_out[f"{m}-环比"] = (
+                    df_out.groupby(group_cols)[m].pct_change().apply(lambda x: f"{x*100:.1f}%" if pd.notnull(x) else "-")
+                )
+        else:
+            for m in metrics:
+                df_out[f"{m}-环比"] = (
+                    df_out[m].pct_change().apply(lambda x: f"{x*100:.1f}%" if pd.notnull(x) else "-")
+                )
+        return df_out
+
     # ==================== Ⅰ. 整体分析 ====================
     st.header("📅 每月整体表现")
 
@@ -127,14 +143,13 @@ if uploaded_files:
         "handle_median": "处理时长d-中位数",
         "handle_p90": "处理时长d-P90",
     })
+    overall = add_mom(overall)
     st.dataframe(overall, use_container_width=True)
 
     metric_all = st.selectbox("请选择要查看的整体指标", ["回复次数-P90", "首次响应时长h-P90", "处理时长d-P90"], index=2)
-
     if overall[metric_all].notna().any():
         df_plot = overall.copy()
         df_plot["环比变化"] = df_plot[metric_all].pct_change()
-
         fig = px.line(
             df_plot,
             x="月份", y=metric_all,
@@ -178,14 +193,13 @@ if uploaded_files:
             "handle_median": "处理时长d-中位数",
             "handle_p90": "处理时长d-P90",
         })
+        line_stats = add_mom(line_stats, ["品牌线"])
         st.dataframe(line_stats, use_container_width=True)
 
         metric_line = st.selectbox("请选择要查看的品牌线指标", ["回复次数-P90", "首次响应时长h-P90", "处理时长d-P90"], index=2)
-
         if line_stats[metric_line].notna().any():
             df_plot = line_stats.copy()
             df_plot["环比变化"] = df_plot.groupby("品牌线")[metric_line].pct_change()
-
             fig = px.line(
                 df_plot,
                 x="月份", y=metric_line, color="品牌线",
@@ -229,14 +243,13 @@ if uploaded_files:
             "handle_median": "处理时长d-中位数",
             "handle_p90": "处理时长d-P90",
         })
+        site_stats = add_mom(site_stats, ["国家"])
         st.dataframe(site_stats, use_container_width=True)
 
         metric_site = st.selectbox("请选择要查看的国家指标", ["回复次数-P90", "首次响应时长h-P90", "处理时长d-P90"], index=2)
-
         if site_stats[metric_site].notna().any():
             df_plot = site_stats.copy()
             df_plot["环比变化"] = df_plot.groupby("国家")[metric_site].pct_change()
-
             fig = px.line(
                 df_plot,
                 x="月份", y=metric_site, color="国家",
@@ -271,7 +284,6 @@ if uploaded_files:
             .merge(handle_channel, on=["month", "ticket_channel"], how="outer")
             .sort_values(["month", "ticket_channel"])
         )
-
         channel_stats = channel_stats.rename(columns={
             "month": "月份", "ticket_channel": "渠道",
             "message_count_median": "回复次数-中位数",
@@ -281,14 +293,13 @@ if uploaded_files:
             "handle_median": "处理时长d-中位数",
             "handle_p90": "处理时长d-P90",
         })
-
+        channel_stats = add_mom(channel_stats, ["渠道"])
         st.dataframe(channel_stats, use_container_width=True)
 
         metric_channel = st.selectbox("请选择要查看的渠道指标", ["回复次数-P90", "首次响应时长h-P90", "处理时长d-P90"], index=2)
         if channel_stats[metric_channel].notna().any():
             df_plot = channel_stats.copy()
             df_plot["环比变化"] = df_plot.groupby("渠道")[metric_channel].pct_change()
-
             fig = px.line(
                 df_plot,
                 x="月份", y=metric_channel, color="渠道",
@@ -321,4 +332,4 @@ if uploaded_files:
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 
-    st.success("✅ 报告生成完毕，可在页面或导出文件中查看。")
+    st.success("✅ 报告生成完毕")
