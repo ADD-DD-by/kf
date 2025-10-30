@@ -91,6 +91,20 @@ if uploaded_files:
         else:
             st.warning("⚠️ 未选择任何渠道，将不显示后续分析结果。")
             st.stop()
+    # ==================== 业务线筛选入口 ====================
+    if "business_line" in df.columns:
+        all_lines = sorted(df["business_line"].dropna().unique().tolist())
+        selected_lines = st.multiselect(
+            "🏷️ 请选择要分析的业务线（可多选）",
+            options=all_lines,
+            default=all_lines,
+        )
+        if selected_lines:
+            df = df[df["business_line"].isin(selected_lines)]
+            st.info(f"当前筛选业务线：{', '.join(selected_lines)}，共 {len(df)} 条记录")
+        else:
+            st.warning("⚠️ 未选择任何业务线，将不显示后续分析结果。")
+            st.stop()
 
     # === 子集 ===
     df_reply = df.query("rn == 1")
