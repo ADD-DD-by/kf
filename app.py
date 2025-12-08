@@ -107,8 +107,9 @@ if uploaded_files:
             st.stop()
 
     # === 子集 ===
-    df_reply = df.query("rn == 1")
-    df_close = df.query("rn == 1")
+    df_reply = df.copy()
+    df_close = df.copy()
+
 
     # 公共函数：计算环比列
     def add_mom(df_group, group_cols=None):
