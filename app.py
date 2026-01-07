@@ -117,6 +117,7 @@ def add_mom(df, group_cols=None):
 st.header("📅 每月整体表现")
 
 reply_m = df_all.groupby("month", as_index=False).agg(
+    工单量=("ticket_id", "count"), 
     回复次数_平均数=("message_count", "mean"),
     回复次数_中位数=("message_count", "median"),
     回复次数_P90=("message_count", lambda x: x.quantile(0.9)),
@@ -148,6 +149,7 @@ st.dataframe(overall_m, use_container_width=True)
 st.header("📆 每年整体表现")
 
 reply_y = df_all.groupby("year", as_index=False).agg(
+    工单量=("ticket_id", "count"), 
     回复次数_平均数=("message_count", "mean"),
     回复次数_中位数=("message_count", "median"),
     回复次数_P90=("message_count", lambda x: x.quantile(0.9)),
