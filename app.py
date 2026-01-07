@@ -177,6 +177,60 @@ if uploaded_files:
         fig.update_traces(marker=dict(size=8, opacity=0.8))
         st.plotly_chart(fig, use_container_width=True)
 
+    # ==================== Ⅰ-2. 每年整体表现 ====================
+    st.header("📆 每年整体表现")
+    
+    # 年字段
+    df_reply["year"] = df_reply["ticket_created_datetime"].dt.year
+    df_close["year"] = df_close["ticket_created_datetime"].dt.year
+    
+    # -------- 年度聚合 --------
+    reply_year = df_reply.groupby("year", as_index=False).agg(
+        message_count_median=("message_count", "median"),
+        message_count_p90=("message_count", lambda x: x.quantile(0.9)),
+    )
+    
+    resp_year = df_close.groupby("year", as_index=False).agg(
+        response_median=("首次响应时长", "median"),
+        response_p90=("首次响应时长", lambda x: x.quantile(0.9)),
+    )
+    
+    handle_year = df_close.groupby("year", as_index=False).agg(
+        handle_median=("处理时长", "median"),
+        handle_p90=("处理时长", lambda x: x.quantile(0.9)),
+    )
+    
+    overall_year = (
+        reply_year
+        .merge(resp_year, on="year", how="outer")
+        .merge(handle_year, on="year", how="outer")
+        .sort_values("year")
+    )
+    
+    # 字段重命名（与你月度表一致）
+    overall_year = overall_year.rename(columns={
+        "year": "年份",
+        "message_count_median": "回复次数-中位数",
+        "message_count_p90": "回复次数-P90",
+        "response_median": "首次响应时长h-中位数",
+        "response_p90": "首次响应时长h-P90",
+        "handle_median": "处理时长d-中位数",
+        "handle_p90": "处理时长d-P90",
+    })
+    
+    # 年环比
+    overall_year = add_mom(overall_year)
+    
+    # 展示
+    st.dataframe(overall_year, use_container_width=True)
+   
+    
+    
+    
+    
+    
+    
+    
     # ==================== Ⅱ. 品牌线分析 ====================
     if "business_line" in df.columns:
         st.header("🏷️ 各贸易品牌线表现")
@@ -385,41 +439,47 @@ if uploaded_files:
             )
             st.plotly_chart(fig, use_container_width=True)
     
-        # ================= 二级分类 =================
-        if "class_two" in df_cls.columns:
-            st.subheader("② 二级问题（class_two）")
-    
+        # ================= 二级分类（带一级） =================
+        if {"class_one", "class_two"}.issubset(df_cls.columns):
+            st.subheader("② 二级问题（class_one → class_two）")
+        
             class_two_stats = (
                 df_cls
-                .groupby(["year", "class_two"], as_index=False)
+                .groupby(["year", "class_one", "class_two"], as_index=False)
                 .agg(
                     回复次数_年均=("message_count", "mean"),
                     回复次数_中位数=("message_count", "median"),
                     回复次数_P90=("message_count", lambda x: x.quantile(0.9)),
                     工单量=("ticket_id", "count"),
                 )
-                .sort_values(["year", "回复次数_P90"], ascending=[True, False])
+                .sort_values(
+                    ["year", "class_one", "回复次数_P90"],
+                    ascending=[True, True, False]
+                )
             )
-    
+        
             st.dataframe(class_two_stats, use_container_width=True)
-    
+        
             metric_cls2 = st.selectbox(
                 "请选择二级问题指标",
                 ["回复次数_年均", "回复次数_中位数", "回复次数_P90"],
                 index=2,
                 key="cls2_metric"
             )
-    
+        
             fig = px.bar(
                 class_two_stats,
                 x="class_two",
                 y=metric_cls2,
-                color="year",
+                color="class_one",
+                facet_col="year",
                 barmode="group",
-                title=f"二级问题 {metric_cls2}（年维度）",
+                title=f"二级问题 {metric_cls2}（按一级问题拆分）",
                 hover_data=["工单量"],
             )
+            fig.update_layout(height=500)
             st.plotly_chart(fig, use_container_width=True)
+
 
 
 
@@ -429,6 +489,7 @@ if uploaded_files:
     buffer = BytesIO()
     with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
         overall.to_excel(writer, index=False, sheet_name="整体表现")
+        overall_year.to_excel(writer, index=False, sheet_name="年度整体表现")
         if "business_line" in df.columns:
             line_stats.to_excel(writer, index=False, sheet_name="品牌线表现")
         if "site_code" in df.columns:
