@@ -327,6 +327,103 @@ if uploaded_files:
             fig.update_traces(marker=dict(size=7, opacity=0.8))
             st.plotly_chart(fig, use_container_width=True)
 
+
+    # ==================== Ⅴ. 问题分类分析（年维度） ====================
+    st.header("🧩 问题分类年均回复次数分析")
+    
+    # ---------- 基础校验 ----------
+    required_cols = {"ticket_id", "ticket_status", "ticket_created_datetime", "message_count"}
+    if not required_cols.issubset(df.columns):
+        st.warning("⚠️ 缺少必要字段（ticket_id / ticket_status / ticket_created_datetime / message_count），无法进行问题分类分析")
+    else:
+        # ---------- 数据准备 ----------
+        df_cls = df.copy()
+    
+        # 仅 closed 工单
+        df_cls = df_cls[df_cls["ticket_status"] == "closed"]
+    
+        # 按 ticket_id 去重
+        df_cls = df_cls.drop_duplicates(subset=["ticket_id"])
+    
+        # 年字段
+        df_cls["year"] = df_cls["ticket_created_datetime"].dt.year
+    
+        # ================= 一级分类 =================
+        if "class_one" in df_cls.columns:
+            st.subheader("① 一级问题（class_one）")
+    
+            class_one_stats = (
+                df_cls
+                .groupby(["year", "class_one"], as_index=False)
+                .agg(
+                    回复次数_年均=("message_count", "mean"),
+                    回复次数_中位数=("message_count", "median"),
+                    回复次数_P90=("message_count", lambda x: x.quantile(0.9)),
+                    工单量=("ticket_id", "count"),
+                )
+                .sort_values(["year", "回复次数_P90"], ascending=[True, False])
+            )
+    
+            st.dataframe(class_one_stats, use_container_width=True)
+    
+            # 可视化
+            metric_cls1 = st.selectbox(
+                "请选择一级问题指标",
+                ["回复次数_年均", "回复次数_中位数", "回复次数_P90"],
+                index=2,
+                key="cls1_metric"
+            )
+    
+            fig = px.bar(
+                class_one_stats,
+                x="class_one",
+                y=metric_cls1,
+                color="year",
+                barmode="group",
+                title=f"一级问题 {metric_cls1}（年维度）",
+                hover_data=["工单量"],
+            )
+            st.plotly_chart(fig, use_container_width=True)
+    
+        # ================= 二级分类 =================
+        if "class_two" in df_cls.columns:
+            st.subheader("② 二级问题（class_two）")
+    
+            class_two_stats = (
+                df_cls
+                .groupby(["year", "class_two"], as_index=False)
+                .agg(
+                    回复次数_年均=("message_count", "mean"),
+                    回复次数_中位数=("message_count", "median"),
+                    回复次数_P90=("message_count", lambda x: x.quantile(0.9)),
+                    工单量=("ticket_id", "count"),
+                )
+                .sort_values(["year", "回复次数_P90"], ascending=[True, False])
+            )
+    
+            st.dataframe(class_two_stats, use_container_width=True)
+    
+            metric_cls2 = st.selectbox(
+                "请选择二级问题指标",
+                ["回复次数_年均", "回复次数_中位数", "回复次数_P90"],
+                index=2,
+                key="cls2_metric"
+            )
+    
+            fig = px.bar(
+                class_two_stats,
+                x="class_two",
+                y=metric_cls2,
+                color="year",
+                barmode="group",
+                title=f"二级问题 {metric_cls2}（年维度）",
+                hover_data=["工单量"],
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+
+
+    
     # ==================== 📤 导出 Excel 报告 ====================
     st.header("📤 导出分析报告")
     buffer = BytesIO()
@@ -338,6 +435,10 @@ if uploaded_files:
             site_stats.to_excel(writer, index=False, sheet_name="国家表现")
         if "ticket_channel" in df.columns:
             channel_stats.to_excel(writer, index=False, sheet_name="渠道表现")
+        if "class_one" in df_cls.columns:
+            class_one_stats.to_excel(writer, index=False, sheet_name="一级问题_年统计")
+        if "class_two" in df_cls.columns:
+            class_two_stats.to_excel(writer, index=False, sheet_name="二级问题_年统计")
     buffer.seek(0)
 
     st.download_button(
