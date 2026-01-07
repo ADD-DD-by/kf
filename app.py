@@ -30,8 +30,8 @@ if not uploaded_files:
 
 # ==================== 读取数据 ====================
 dfs = []
-for file in uploaded_files:
-    df_tmp = pd.read_excel(file) if file.name.endswith("xlsx") else pd.read_csv(file)
+for f in uploaded_files:
+    df_tmp = pd.read_excel(f) if f.name.endswith("xlsx") else pd.read_csv(f)
     df_tmp = df_tmp.iloc[:-1, :].dropna(how="all")
     dfs.append(df_tmp)
 
@@ -59,12 +59,16 @@ def add_mom(df, group_cols=None):
     metrics = [c for c in out.columns if any(k in c for k in ["回复次数", "响应时长", "处理时长"])]
     for m in metrics:
         if group_cols:
-            out[f"{m}-环比"] = out.groupby(group_cols)[m].pct_change().apply(
-                lambda x: f"{x*100:.1f}%" if pd.notnull(x) else "-"
+            out[f"{m}-环比"] = (
+                out.groupby(group_cols)[m]
+                .pct_change()
+                .apply(lambda x: f"{x*100:.1f}%" if pd.notnull(x) else "-")
             )
         else:
-            out[f"{m}-环比"] = out[m].pct_change().apply(
-                lambda x: f"{x*100:.1f}%" if pd.notnull(x) else "-"
+            out[f"{m}-环比"] = (
+                out[m]
+                .pct_change()
+                .apply(lambda x: f"{x*100:.1f}%" if pd.notnull(x) else "-")
             )
     return out
 
@@ -88,11 +92,10 @@ handle_m = df.groupby("month", as_index=False).agg(
 )
 
 overall = (
-    reply_m
-    .merge(resp_m, on="month")
-    .merge(handle_m, on="month")
-    .rename(columns={"month": "月份"})
-    .sort_values("月份")
+    reply_m.merge(resp_m, on="month")
+           .merge(handle_m, on="month")
+           .rename(columns={"month": "月份"})
+           .sort_values("月份")
 )
 
 overall = add_mom(overall)
@@ -118,28 +121,69 @@ handle_y = df.groupby("year", as_index=False).agg(
 )
 
 overall_year = (
-    reply_y
-    .merge(resp_y, on="year")
-    .merge(handle_y, on="year")
-    .rename(columns={"year": "年份"})
-    .sort_values("年份")
+    reply_y.merge(resp_y, on="year")
+           .merge(handle_y, on="year")
+           .rename(columns={"year": "年份"})
+           .sort_values("年份")
 )
 
 overall_year = add_mom(overall_year)
 st.dataframe(overall_year, use_container_width=True)
 
+# ==================== Ⅱ. 品牌线分析 ====================
+if "business_line" in df.columns:
+    st.header("🏷️ 品牌线表现")
+    bl_stats = (
+        df.groupby(["month", "business_line"], as_index=False)
+        .agg(
+            回复次数_P90=("message_count", lambda x: x.quantile(0.9)),
+            首次响应时长h_P90=("首次响应时长", lambda x: x.quantile(0.9)),
+            处理时长d_P90=("处理时长", lambda x: x.quantile(0.9)),
+        )
+        .rename(columns={"month": "月份", "business_line": "品牌线"})
+        .sort_values(["月份", "品牌线"])
+    )
+    bl_stats = add_mom(bl_stats, ["品牌线"])
+    st.dataframe(bl_stats, use_container_width=True)
+
+# ==================== Ⅲ. 国家分析 ====================
+if "site_code" in df.columns:
+    st.header("🌍 国家表现")
+    site_stats = (
+        df.groupby(["month", "site_code"], as_index=False)
+        .agg(
+            回复次数_P90=("message_count", lambda x: x.quantile(0.9)),
+            首次响应时长h_P90=("首次响应时长", lambda x: x.quantile(0.9)),
+            处理时长d_P90=("处理时长", lambda x: x.quantile(0.9)),
+        )
+        .rename(columns={"month": "月份", "site_code": "国家"})
+        .sort_values(["月份", "国家"])
+    )
+    site_stats = add_mom(site_stats, ["国家"])
+    st.dataframe(site_stats, use_container_width=True)
+
+# ==================== Ⅳ. 渠道分析 ====================
+if "ticket_channel" in df.columns:
+    st.header("💬 渠道表现")
+    ch_stats = (
+        df.groupby(["month", "ticket_channel"], as_index=False)
+        .agg(
+            回复次数_P90=("message_count", lambda x: x.quantile(0.9)),
+            首次响应时长h_P90=("首次响应时长", lambda x: x.quantile(0.9)),
+            处理时长d_P90=("处理时长", lambda x: x.quantile(0.9)),
+        )
+        .rename(columns={"month": "月份", "ticket_channel": "渠道"})
+        .sort_values(["月份", "渠道"])
+    )
+    ch_stats = add_mom(ch_stats, ["渠道"])
+    st.dataframe(ch_stats, use_container_width=True)
+
 # ==================== Ⅴ. 问题分类分析（年） ====================
 st.header("🧩 问题分类年均回复次数分析")
 
 if {"ticket_id", "ticket_status", "class_one", "message_count"}.issubset(df.columns):
+    df_cls = df[df["ticket_status"] == "closed"].drop_duplicates("ticket_id")
 
-    df_cls = (
-        df[df["ticket_status"] == "closed"]
-        .drop_duplicates("ticket_id")
-    )
-
-    # 一级
-    st.subheader("① 一级问题")
     class_one_stats = (
         df_cls.groupby(["year", "class_one"], as_index=False)
         .agg(
@@ -152,9 +196,7 @@ if {"ticket_id", "ticket_status", "class_one", "message_count"}.issubset(df.colu
     )
     st.dataframe(class_one_stats, use_container_width=True)
 
-    # 二级（带一级）
     if "class_two" in df_cls.columns:
-        st.subheader("② 二级问题（含一级）")
         class_two_stats = (
             df_cls.groupby(["year", "class_one", "class_two"], as_index=False)
             .agg(
@@ -174,8 +216,14 @@ buffer = BytesIO()
 with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
     overall.to_excel(writer, index=False, sheet_name="每月整体表现")
     overall_year.to_excel(writer, index=False, sheet_name="每年整体表现")
+    if "business_line" in df.columns:
+        bl_stats.to_excel(writer, index=False, sheet_name="品牌线表现")
+    if "site_code" in df.columns:
+        site_stats.to_excel(writer, index=False, sheet_name="国家表现")
+    if "ticket_channel" in df.columns:
+        ch_stats.to_excel(writer, index=False, sheet_name="渠道表现")
     class_one_stats.to_excel(writer, index=False, sheet_name="一级问题_年统计")
-    if "class_two_stats" in locals():
+    if "class_two" in df_cls.columns:
         class_two_stats.to_excel(writer, index=False, sheet_name="二级问题_年统计")
 
 buffer.seek(0)
